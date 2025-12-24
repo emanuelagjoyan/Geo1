@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="hy">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Մեծ Խաղացանկ - Pro Menu Control</title>
+    <style>
+        :root {
+            --primary: #007bff;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --dark: #2c3e50;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #eef2f7;
+            margin: 0; padding: 10px; min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        /* Modals */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 2000;
+            display: none; justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: white; padding: 40px; border-radius: 20px; text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        .setup-btn {
+            padding: 15px 30px; margin: 10px; font-size: 20px; font-weight: bold;
+            border: none; border-radius: 12px; cursor: pointer; color: white;
+            transition: transform 0.2s;
+        }
+
+        /* Scoreboard & Header */
+        .game-header-area { display: none; width: 100%; max-width: 1100px; flex-direction: column; gap: 15px; }
+        .scoreboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        
+        .team-box {
+            background: #fff; border-radius: 15px; padding: 15px;
+            border: 4px solid #d1d8e0; transition: all 0.4s;
+        }
+        .team-box.active-turn {
+            border-color: var(--success);
+            background: linear-gradient(to bottom, #ffffff, #f0fff4);
+            transform: translateY(-8px);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(40,167,69, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(40,167,69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(40,167,69, 0); }
+        }
+
+        .team-score { font-size: 42px; font-weight: 900; color: var(--dark); text-align: center; }
+        .answer-input {
+            width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;
+            font-size: 16px; box-sizing: border-box; outline: none;
+        }
+
+        .controls-bar { display: flex; justify-content: center; gap: 15px; margin-top: 10px; flex-wrap: wrap; }
+        .ctrl-btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; }
+
+        /* Grid */
+        .game-container {
+            display: none; grid-template-columns: 1fr 1fr; gap: 12px;
+            width: 100%; max-width: 850px; margin-top: 25px;
+            position: relative;
+        }
+        .tile-btn {
+            min-height: 75px; border-radius: 12px; border: 2px solid var(--primary);
+            background: white; color: var(--primary); font-size: 20px; font-weight: 800;
+            cursor: pointer; transition: 0.3s; position: relative;
+        }
+        .tile-btn.game-active { background: var(--success) !important; color: white !important; border-color: transparent !important; }
+        .topic-confirmed { background: #ffeaa7 !important; border-color: var(--warning) !important; }
+
+        /* Effects Overlay */
+        #effects-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 9999; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+        }
+        
+        .number-box-display {
+            font-size: 180px; font-weight: 900; color: var(--success);
+            background: white; width: 280px; height: 280px; border-radius: 20px;
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            z-index: 10000;
+        }
+
+        .pop-animation { animation: slowPop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) both; }
+        .fly-to-target { transition: all 0.8s cubic-bezier(0.42, 0, 0.58, 1); position: fixed; z-index: 10001; }
+        .effect-text-under { font-size: 70px; font-weight: 900; color: white; text-shadow: 3px 3px 20px rgba(0,0,0,0.6); animation: slideUp 0.8s 0.3s both; }
+
+        @keyframes slowPop { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes slideUp { 0% { transform: translateY(40px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+        .disco-bg { animation: discoBg 0.4s infinite; }
+        @keyframes discoBg { 0% { background: #ff7675; } 33% { background: #55efc4; } 66% { background: #74b9ff; } 100% { background: #a29bfe; } }
+
+        .back-btn { display: none; position: fixed; bottom: 20px; left: 20px; padding: 12px 25px; background: var(--danger); color: white; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; z-index: 100; }
+    </style>
+</head>
+<body>
+
+    <div id="teamModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 style="margin-bottom: 25px;">Ընտրեք թիմերի քանակը</h2>
+            <button class="setup-btn" style="background: #0984e3" onclick="confirmTeams(2)">2 Թիմ</button>
+            <button class="setup-btn" style="background: #6c5ce7" onclick="confirmTeams(3)">3 Թիմ</button>
+            <button class="setup-btn" style="background: #e84393" onclick="confirmTeams(4)">4 Թիմ</button>
+        </div>
+    </div>
+
+    <button id="backButton" class="back-btn" onclick="backToMenu()">⬅️ Վերադառնալ Մենյու</button>
+    <div id="effects-overlay"></div>
+
+    <h2 id="main-title" style="margin-top: 20px;">ԱՇԽԱՐՀԱԳՐԱԿԱՆ ՔՍԱՆՅԱԿՆԵՐ</h2>
+
+    <div id="gameHeader" class="game-header-area">
+        <div id="scoreboard" class="scoreboard"></div>
+        <div class="controls-bar">
+            <button class="ctrl-btn" style="background-color: #636e72;" onclick="switchTurn()">⇄ Փոխել հերթը</button>
+            <button class="ctrl-btn" style="background: var(--warning); color: black;" onclick="undo()">↩️ Հետ քայլ</button>
+            <button class="ctrl-btn" style="background: var(--danger);" onclick="resetScores()">⚠️ Զրոյացնել</button>
+        </div>
+    </div>
+
+    <div id="menuArea" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; width: 100%; max-width: 1100px; margin-top: 30px;"></div>
+    <div id="gameArea" class="game-container"></div>
+
+    <script>
+        const allData = [
+            { title: "Երկրները ըստ բնակչության թվի (2025)", list: ["Հնդկաստան", "Չինաստան", "ԱՄՆ", "Ինդոնեզիա", "Պակիստան", "Նիգերիա", "Բրազիլիա", "Բանգլադեշ", "Ռուսաստան", "Եթովպիա", "Մեքսիկա", "Ճապոնիա", "Եգիպտոս", "Ֆիլիպիններ", "Կոնգո", "Վիետնամ", "Իրան", "Թուրքիա", "Գերմանիա", "Թաիլանդ"] },
+            { title: "Երկրները ըստ տարածքի մեծության", list: ["Ռուսաստան", "Կանադա", "Չինաստան", "ԱՄՆ", "Բրազիլիա", "Ավստրալիա", "Հնդկաստան", "Արգենտինա", "Ղազախստան", "Ալժիր", "Կոնգո", "Սաուդյան Արաբիա", "Մեքսիկա", "Ինդոնեզիա", "Սուդան", "Լիբիա", "Իրան", "Մոնղոլիա", "Պերու", "Չադ"] },
+            { title: "Ամենաշատ էլեկտրաէներգիա արտադրողները", list: ["Չինաստան", "ԱՄՆ", "Հնդկաստան", "Ռուսաստան", "Ճապոնիա", "Կանադա", "Բրազիլիա", "Հարավային Կորեա", "Գերմանիա", "Ֆրանսիա", "Սաուդյան Արաբիա", "Իրան", "Մեքսիկա", "Թուրքիա", "Ինդոնեզիա", "Մեծ Բրիտանիա", "Իտալիա", "Վիետնամ", "Իսպանիա", "Ավստրալիա"] },
+            { title: "Նավթի ամենաշատ պաշարներ ունեցողները", list: ["Վենեսուելա", "Սաուդյան Արաբիա", "Իրան", "Կանադա", "Իրաք", "ԱՄԷ", "Քուվեյթ", "Ռուսաստան", "ԱՄՆ", "Լիբիա", "Նիգերիա", "Ղազախստան", "Չինաստան", "Քաթար", "Բրազիլիա", "Ալժիր", "Մեքսիկա", "Անգոլա", "Էկվադոր", "Նորվեգիա"] },
+            { title: "Ամենաշատ տուրիստներ ընդունող երկրները", list: ["Ֆրանսիա", "Իսպանիա", "ԱՄՆ", "Իտալիա", "Թուրքիա", "Մեքսիկա", "Մեծ Բրիտանիա", "Գերմանիա", "Հունաստան", "Ավստրիա", "Թաիլանդ", "ԱՄԷ", "Սաուդյան Արաբիա", "Ճապոնիա", "Նիդերլանդներ", "Մալայզիա", "Լեհաստան", "Կանադա", "Հոնկոնգ", "Խորվաթիա"] },
+            { title: "Ամենաշատ մեքենա արտադրող երկրները", list: ["Չինաստան", "ԱՄՆ", "Ճապոնիա", "Հնդկաստան", "Հարավային Կորեա", "Գերմանիա", "Մեքսիկա", "Բրազիլիա", "Իսպանիա", "Թաիլանդ", "Կանադա", "Ֆրանսիա", "Թուրքիա", "Չեխիա", "Ինդոնեզիա", "Իրան", "Սլովակիա", "Մեծ Բրիտանիա", "Իտալիա", "Մալայզիա"] },
+            { title: "Ամենաշատ բրինձ արտադրող երկրները", list: ["Չինաստան", "Հնդկաստան", "Բանգլադեշ", "Ինդոնեզիա", "Վիետնամ", "Թաիլանդ", "Մյանմա", "Ֆիլիպիններ", "Պակիստան", "Բրազիլիա", "Կամբոջա", "Ճապոնիա", "Նիգերիա", "Նեպալ", "Շրի Լանկա", "Եգիպտոս", "Հարավային Կորեա", "Մադագասկար", "ԱՄՆ", "Լաոս"] },
+            { title: "Աշխարհի երկրները ըստ բյուջեի եկամուտների", list: ["ԱՄՆ", "Չինաստան", "Գերմանիա", "Ճապոնիա", "Ֆրանսիա", "Մեծ Բրիտանիա", "Իտալիա", "Կանադա", "Բրազիլիա", "Իսպանիա", "Ավստրալիա", "Հնդկաստան", "Հարավային Կորեա", "Ռուսաստան", "Նիդերլանդներ", "Մեքսիկա", "Բելգիա", "Շվեյցարիա", "Շվեդիա", "Նորվեգիա"] }
+        ];
+
+        let numTeams = 2, scores = [], activeTurn = 0, gameStates = [], history = [], currentGameIndex = -1;
+        let menuProgress = new Array(allData.length).fill(false);
+
+        function renderMenu() {
+            const container = document.getElementById("menuArea");
+            container.style.display = "grid";
+            document.getElementById("gameHeader").style.display = "none";
+            document.getElementById("gameArea").style.display = "none";
+            document.getElementById("backButton").style.display = "none";
+            document.getElementById("main-title").innerText = "ԱՇԽԱՐՀԱԳՐԱԿԱՆ ՔՍԱՆՅԱԿՆԵՐ";
+            container.innerHTML = "";
+            
+            allData.forEach((item, idx) => {
+                let btn = document.createElement("button");
+                btn.className = "tile-btn";
+                
+                if (menuProgress[idx]) {
+                    btn.innerText = (idx + 1) + ". " + item.title;
+                    btn.classList.add("topic-confirmed");
+                } else {
+                    btn.innerText = (idx + 1);
+                }
+
+                // Ձախ քլիք մենյուում
+                btn.onclick = () => {
+                    if (menuProgress[idx]) {
+                        showTeamSelector(idx);
+                    } else {
+                        menuProgress[idx] = true;
+                        renderMenu();
+                    }
+                };
+
+                // Աջ քլիք մենյուում՝ փակելու համար
+                btn.oncontextmenu = (e) => {
+                    e.preventDefault();
+                    if (menuProgress[idx]) {
+                        menuProgress[idx] = false;
+                        renderMenu();
+                    }
+                };
+
+                container.appendChild(btn);
+            });
+        }
+
+        function showTeamSelector(idx) {
+            currentGameIndex = idx;
+            document.getElementById("teamModal").style.display = "flex";
+        }
+
+        function confirmTeams(count) {
+            numTeams = count;
+            document.getElementById("teamModal").style.display = "none";
+            startSession();
+        }
+
+        function startSession() {
+            document.getElementById("menuArea").style.display = "none";
+            document.getElementById("gameArea").style.display = "grid";
+            document.getElementById("gameHeader").style.display = "flex";
+            document.getElementById("backButton").style.display = "block";
+            document.getElementById("main-title").innerText = allData[currentGameIndex].title;
+            gameStates = new Array(20).fill(false);
+            scores = new Array(numTeams).fill(0);
+            activeTurn = 0;
+            buildScoreboard();
+            renderGrid();
+            focusInput();
+        }
+
+        function buildScoreboard() {
+            const sb = document.getElementById("scoreboard");
+            sb.innerHTML = "";
+            for (let i = 0; i < numTeams; i++) {
+                sb.innerHTML += `
+                    <div id="team-${i}" class="team-box ${i===0?'active-turn':''}">
+                        <input class="team-name-input" style="width:100%; border:none; text-align:center; font-weight:bold; font-size:18px;" value="Թիմ ${i+1}">
+                        <div id="score-val-${i}" class="team-score">0</div>
+                        <input id="input-${i}" class="answer-input" placeholder="Պատասխան..." onkeypress="if(event.key==='Enter') check(${i})">
+                    </div>`;
+            }
+        }
+
+        function renderGrid() {
+            const container = document.getElementById("gameArea");
+            container.innerHTML = "";
+            for (let i = 0; i < 20; i++) {
+                let btn = document.createElement("button");
+                btn.className = "tile-btn " + (gameStates[i] ? "game-active" : "");
+                btn.id = "btn-tile-" + i;
+                btn.innerText = gameStates[i] ? (i+1)+". "+allData[currentGameIndex].list[i] : (i+1);
+                
+                btn.onclick = () => reveal(i);
+                btn.oncontextmenu = (e) => {
+                    e.preventDefault();
+                    if (gameStates[i]) {
+                        if (confirm("Փակե՞լ այս հորիզոնականը:")) {
+                            gameStates[i] = false;
+                            scores[activeTurn] -= (i + 1);
+                            if(scores[activeTurn] < 0) scores[activeTurn] = 0;
+                            updateUI();
+                            renderGrid();
+                        }
+                    }
+                };
+                container.appendChild(btn);
+            }
+        }
+
+        function focusInput() {
+            setTimeout(() => {
+                const input = document.getElementById(`input-${activeTurn}`);
+                if (input) { input.focus(); input.value = ""; }
+            }, 100);
+        }
+
+        function check(teamIdx) {
+            if (teamIdx !== activeTurn) return;
+            const val = document.getElementById(`input-${teamIdx}`).value.trim().toLowerCase();
+            const list = allData[currentGameIndex].list;
+            let found = -1;
+            for (let i = 0; i < 20; i++) {
+                if (!gameStates[i] && list[i].toLowerCase().includes(val) && val.length > 2) { found = i; break; }
+            }
+            if (found !== -1) reveal(found); else switchTurn();
+        }
+
+        function reveal(i) {
+            if (gameStates[i]) return;
+            history.push({scores: [...scores], turn: activeTurn, states: [...gameStates]});
+            
+            const overlay = document.getElementById("effects-overlay");
+            overlay.style.display = "flex";
+            overlay.innerHTML = "";
+
+            const numBox = document.createElement("div");
+            numBox.className = "number-box-display pop-animation";
+            numBox.innerText = i + 1;
+            overlay.appendChild(numBox);
+
+            const h = i + 1;
+            let effectText = "";
+            if (h >= 19) { document.body.classList.add("disco-bg"); effectText = "DISCO PARTY! 🕺✨"; }
+            else if (h >= 17) effectText = "WOW! 🔥";
+            else if (h >= 15) effectText = "🎯 PERFECT!";
+            else if (h >= 13) effectText = "GREAT! 👍";
+            else if (h >= 11) effectText = "GOOD! ✨";
+
+            if (effectText) {
+                const txt = document.createElement("div");
+                txt.className = "effect-text-under";
+                txt.innerText = effectText;
+                overlay.appendChild(txt);
+            }
+
+            setTimeout(() => {
+                const targetBtn = document.getElementById("btn-tile-" + i);
+                const targetRect = targetBtn.getBoundingClientRect();
+                const boxRect = numBox.getBoundingClientRect();
+
+                numBox.classList.remove("pop-animation");
+                numBox.classList.add("fly-to-target");
+                numBox.style.left = boxRect.left + "px";
+                numBox.style.top = boxRect.top + "px";
+                numBox.style.margin = "0";
+
+                setTimeout(() => {
+                    numBox.style.left = targetRect.left + "px";
+                    numBox.style.top = targetRect.top + "px";
+                    numBox.style.width = targetRect.width + "px";
+                    numBox.style.height = targetRect.height + "px";
+                    numBox.style.fontSize = "20px";
+                    numBox.style.borderRadius = "12px";
+                    numBox.style.opacity = "0.5";
+                }, 50);
+
+                setTimeout(() => {
+                    overlay.style.display = "none";
+                    document.body.classList.remove("disco-bg");
+                    gameStates[i] = true;
+                    scores[activeTurn] += (i + 1);
+                    updateUI();
+                    renderGrid();
+                    switchTurn();
+                }, 850);
+            }, 2200);
+        }
+
+        function switchTurn() { activeTurn = (activeTurn + 1) % numTeams; updateUI(); focusInput(); }
+        function updateUI() {
+            for (let i = 0; i < numTeams; i++) {
+                const scoreElem = document.getElementById(`score-val-${i}`);
+                if (scoreElem) scoreElem.innerText = scores[i];
+                const box = document.getElementById(`team-${i}`);
+                if (box) box.classList.toggle("active-turn", i === activeTurn);
+            }
+        }
+        function undo() { if (history.length === 0) return; let last = history.pop(); scores = last.scores; activeTurn = last.turn; gameStates = last.states; updateUI(); renderGrid(); focusInput(); }
+        function resetScores() { if(confirm("Զրոյացնե՞լ հաշիվը")) { scores = new Array(numTeams).fill(0); updateUI(); focusInput(); } }
+        function backToMenu() { if (confirm("Վերադառնալ մենյու՞")) renderMenu(); }
+
+        renderMenu();
+    </script>
+</body>
+</html>
